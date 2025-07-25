@@ -10,15 +10,27 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.CameraSelector
@@ -27,25 +39,23 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
-import java.util.concurrent.Executors
-import androidx.core.content.ContextCompat
-import androidx.core.app.ActivityCompat
-import androidx.core.view.WindowCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
-import me.osku.readingwithpinyin.ui.theme.ReadingWithPinyinTheme
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.toArgb
+import java.util.concurrent.Executors
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import android.content.res.Resources
 import android.util.Size
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import androidx.camera.core.ExperimentalGetImage
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.MaterialTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,7 +76,7 @@ class MainActivity : ComponentActivity() {
                         View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 )
         setContent {
-            ReadingWithPinyinTheme {
+            MaterialTheme {
                 FullscreenCameraAR()
             }
         }
@@ -87,7 +97,7 @@ class MainActivity : ComponentActivity() {
                             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     )
             setContent {
-                ReadingWithPinyinTheme {
+                MaterialTheme {
                     FullscreenCameraAR()
                 }
             }
@@ -106,6 +116,10 @@ class MainActivity : ComponentActivity() {
         val previewSize = remember { mutableStateOf<Pair<Int, Int>?>(null) }
         val scope = rememberCoroutineScope()
 
+        // 新增暫停狀態
+        val isPaused = remember { mutableStateOf(false) }
+        val frozenOcrResults = remember { mutableStateOf<List<Pair<String, Rect>>>(emptyList()) }
+
         // 載入注音表
         LaunchedEffect(Unit) {
             scope.launch(Dispatchers.IO) {
@@ -113,7 +127,26 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            // 按下時暫停：保存當前的 OCR 結果
+                            frozenOcrResults.value = ocrResults.value
+                            isPaused.value = true
+
+                            // 等待手指放開
+                            tryAwaitRelease()
+
+                            // 放開時恢復：清除凍結的結果，恢復實時分析
+                            isPaused.value = false
+                            frozenOcrResults.value = emptyList()
+                        }
+                    )
+                }
+        ) {
             // CameraX 預覽
             AndroidView(
                 factory = { ctx ->
@@ -135,6 +168,12 @@ class MainActivity : ComponentActivity() {
                             .build()
                             .also { analysis ->
                                 analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
+                                    // 檢查是否暫停
+                                    if (isPaused.value) {
+                                        imageProxy.close()
+                                        return@setAnalyzer
+                                    }
+
                                     // 記錄原始影像尺寸與旋轉
                                     imageSize.value = Pair(imageProxy.width, imageProxy.height)
                                     //無視旋轉角度
@@ -188,7 +227,10 @@ class MainActivity : ComponentActivity() {
                     val offsetX = (canvasWidth - scaledWidth) / 2f
                     val offsetY = (canvasHeight - scaledHeight) / 2f
 
-                    ocrResults.value.forEach { (text, rect) ->
+                    // 根據暫停狀態選擇要顯示的結果
+                    val resultsToShow = if (isPaused.value) frozenOcrResults.value else ocrResults.value
+
+                    resultsToShow.forEach { (text, rect) ->
                         // 轉換座標，考慮旋轉
                         val transformedRect = transformCoordinates(
                             rect,
@@ -200,12 +242,13 @@ class MainActivity : ComponentActivity() {
                             offsetY
                         )
 
-                        if(transformedRect.width() < 40 || transformedRect.height() < 40)
+                        if(transformedRect.width() < 30 || transformedRect.height() < 30)
                             return@forEach // 忽略過小的框選區域
 
-                        // 畫文字框
+                        // 畫文字框 - 暫停時使用不同顏色
+                        val rectColor = if (isPaused.value) Color.Green else Color.Red
                         drawRect(
-                            color = Color.Red,
+                            color = rectColor,
                             topLeft = androidx.compose.ui.geometry.Offset(
                                 transformedRect.left,
                                 transformedRect.top
@@ -214,7 +257,7 @@ class MainActivity : ComponentActivity() {
                                 transformedRect.width(),
                                 transformedRect.height()
                             ),
-                            style = Stroke(width = 3f)
+                            style = Stroke(width = 1f)
                         )
 
                         // 顯示注音
@@ -230,49 +273,71 @@ class MainActivity : ComponentActivity() {
                                 val fontAdjust = minOf(rectWidth, rectHeight)
 
                                 // 計算合適的字體大小，確保所有注音字符都能在框內垂直顯示
-                                val maxFontSize = fontAdjust / 3 * .8f
-                                val fontSize = maxOf(maxFontSize, 20f) // 最小字體大小為20
+                                val maxFontSize = fontAdjust / 3
+                                val fontSize = maxOf(maxFontSize, 10f) // 最小字體大小為10
 
                                 // 計算垂直間距，確保字符不重疊
-                                val lineHeight = fontSize * 1.4f // 行高比字體大小稍大，避免重疊
-                                val totalHeight = zhuyin.size * lineHeight
-
-                                // 計算起始Y位置，讓注音在框內垂直居中
-                                val startY = transformedRect.top /*+ (rectHeight - totalHeight) / 2f*/ + lineHeight * 0.8f
+                                val lineHeight = fontSize * 1f
 
                                 // 水平位置置中
                                 val centerX = transformedRect.centerX()
 
-                                // 垂直繪製每個注音字符
+                                // 使用新的注音符號處理方式
                                 val firstZhuyin = zhuyin.first()
-                                firstZhuyin.forEachIndexed { index, zhuyinChar ->
-                                    val yPosition = startY + index * lineHeight
+                                val zhuyinComponents = parseZhuyinWithTones(firstZhuyin)
 
-                                    // 確保字符在框內
-//                                    if (yPosition > transformedRect.top && yPosition < transformedRect.bottom) {
-                                        drawIntoCanvas { canvas ->
-                                            val paint = android.graphics.Paint().apply {
-                                                color = Color.Yellow.toArgb()
-                                                textSize = fontSize
-                                                isFakeBoldText = true
-                                                textAlign = android.graphics.Paint.Align.CENTER
-                                                setShadowLayer(3f, 1f, 1f, Color.Black.toArgb())
-                                                isAntiAlias = true
-                                            }
+                                // 計算起始Y位置，讓注音在框內垂直居中
+                                val maxY = zhuyinComponents.maxOfOrNull { it.y } ?: 0f
+                                val minY = zhuyinComponents.minOfOrNull { it.y } ?: 0f
+                                val totalHeight = (maxY - minY + 1) * lineHeight
+                                val paddingTop = (transformedRect.bottom - transformedRect.top - totalHeight) / 2
+                                val startY = transformedRect.top + lineHeight * 0.8f + paddingTop
 
-                                            canvas.nativeCanvas.drawText(
-                                                zhuyinChar.toString(),
-                                                centerX,
-                                                yPosition,
-                                                paint
-                                            )
+                                // 繪製每個注音組件
+                                zhuyinComponents.forEach { component ->
+                                    val xPosition = centerX + component.x * fontSize * 0.6f // 水平偏移
+                                    val yPosition = startY + (component.y - minY) * lineHeight
+
+                                    drawIntoCanvas { canvas ->
+                                        val paint = android.graphics.Paint().apply {
+                                            color = Color.Yellow.toArgb()
+                                            textSize = if (component.isTone) fontSize * 0.8f else fontSize // 聲調符號稍小
+                                            isFakeBoldText = true
+                                            textAlign = android.graphics.Paint.Align.CENTER
+                                            setShadowLayer(3f, 1f, 1f, Color.Black.toArgb())
+                                            isAntiAlias = true
                                         }
-//                                    }
+
+                                        canvas.nativeCanvas.drawText(
+                                            component.char.toString(),
+                                            xPosition,
+                                            yPosition,
+                                            paint
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // 狀態指示器
+            if (isPaused.value) {
+                Text(
+                    text = "已暫停 - 放開手指恢復",
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.7f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
         // 顯示 OCR 結果
@@ -302,6 +367,55 @@ class MainActivity : ComponentActivity() {
             val list = dict[char.toString()]
             return list?.firstOrNull() ?: char.toString()
         }
+    }
+
+    // 處理注音符號的聲調位置
+    data class ZhuyinComponent(
+        val char: Char,
+        val x: Float,
+        val y: Float,
+        val isTone: Boolean = false
+    )
+
+    fun parseZhuyinWithTones(zhuyin: String): List<ZhuyinComponent> {
+        val components = mutableListOf<ZhuyinComponent>()
+        val tones = setOf('ˊ', 'ˇ', 'ˋ', '˙') // 二聲、三聲、四聲
+
+        // 分離聲調符號和其他符號
+        val nonToneChars = mutableListOf<Char>()
+        val toneChars = mutableListOf<Char>()
+
+        zhuyin.forEach { char ->
+            if (tones.contains(char)) {
+                toneChars.add(char)
+            } else {
+                nonToneChars.add(char)
+            }
+        }
+
+        // 先添加非聲調符號
+        nonToneChars.forEachIndexed { index, char ->
+            components.add(ZhuyinComponent(char, 0f, index.toFloat(), false))
+        }
+
+        // 計算聲調符號的位置（中間偏右）
+        val middleIndex = nonToneChars.size / 2f
+        val toneX = 1.0f // 偏右的距離
+
+        toneChars.forEach { toneChar ->
+            when (toneChar) {
+                '˙' -> {
+                    // 輕聲符號放在最上方
+                    components.add(ZhuyinComponent(toneChar, toneX, -0.5f, true))
+                }
+                else -> {
+                    // 其他聲調符號放在中間偏右
+                    components.add(ZhuyinComponent(toneChar, toneX, middleIndex, true))
+                }
+            }
+        }
+
+        return components
     }
 
     // 分詞模組（暫以單字切分）

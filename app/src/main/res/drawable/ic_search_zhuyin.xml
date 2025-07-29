@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 放大鏡鏡面 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/black"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M9,2C13.97,2 18,6.03 18,11C18,13.12 17.33,15.07 16.19,16.62L20.71,21.14C21.1,21.53 21.1,22.16 20.71,22.55C20.32,22.94 19.69,22.94 19.3,22.55L14.78,18.03C13.23,19.17 11.28,19.84 9.16,19.84C4.19,19.84 0.16,15.81 0.16,10.84C0.16,5.87 4.19,1.84 9.16,1.84" />
+
+    <!-- 放大鏡把手 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/black"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M16.24,16.24L20.71,20.71" />
+
+    <path
+        android:fillColor="@android:color/black"
+        android:pathData="M6.5,7L6.5,13" />
+    <path
+        android:fillColor="@android:color/black"
+        android:strokeColor="@android:color/black"
+        android:strokeWidth="1.2"
+        android:pathData="M6,8.5L8,8.5" />
+
+    <path
+        android:fillColor="@android:color/black"
+        android:pathData="M9.5,7L9.5,13" />
+    <path
+        android:fillColor="@android:color/black"
+        android:strokeColor="@android:color/black"
+        android:strokeWidth="1.2"
+        android:pathData="M9,8.5L11,8.5" />
+    <path
+        android:fillColor="@android:color/black"
+        android:strokeColor="@android:color/black"
+        android:strokeWidth="1.2"
+        android:pathData="M9,11L11,11" />
+
+    <path
+        android:fillColor="@android:color/black"
+        android:pathData="M13,7L13,13" />
+    <path
+        android:fillColor="@android:color/black"
+        android:strokeColor="@android:color/black"
+        android:strokeWidth="1.2"
+        android:pathData="M13,13L15,13" />
+    <path
+        android:fillColor="@android:color/black"
+        android:pathData="M15,7L15,13" />
+
+</vector>

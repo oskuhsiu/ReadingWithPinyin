@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
             AndroidView(
                 factory = { ctx ->
                     val previewView = PreviewView(ctx)
-                    previewView.scaleType = PreviewView.ScaleType.FILL_CENTER
+                    previewView.scaleType = PreviewView.ScaleType.FIT_CENTER
 
                     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                     cameraProviderFuture.addListener({
@@ -448,16 +448,33 @@ class MainActivity : ComponentActivity() {
                             // 計算每個字在行內的位置，為每個字創建獨立的 Rect
                             filteredChars.forEachIndexed { idx, c ->
                                 val charRect = line.boundingBox ?: Rect()
-                                val charWidth = charRect.width() / filteredChars.length.toFloat()
-                                val charLeft = charRect.left + (idx * charWidth).toInt()
-                                val charRight = charRect.left + ((idx + 1) * charWidth).toInt()
 
-                                val individualCharRect = Rect(
-                                    charLeft,
-                                    charRect.top,
-                                    charRight,
-                                    charRect.bottom
-                                )
+                                // 根據文字行的寬高比例決定切分方向
+                                val individualCharRect = if (charRect.height() > charRect.width()) {
+                                    // 縱向切分（直立方式）
+                                    val charHeight = charRect.height() / filteredChars.length.toFloat()
+                                    val charTop = charRect.top + (idx * charHeight).toInt()
+                                    val charBottom = charRect.top + ((idx + 1) * charHeight).toInt()
+
+                                    Rect(
+                                        charRect.left,
+                                        charTop,
+                                        charRect.right,
+                                        charBottom
+                                    )
+                                } else {
+                                    // 橫向切分（原有方式）
+                                    val charWidth = charRect.width() / filteredChars.length.toFloat()
+                                    val charLeft = charRect.left + (idx * charWidth).toInt()
+                                    val charRight = charRect.left + ((idx + 1) * charWidth).toInt()
+
+                                    Rect(
+                                        charLeft,
+                                        charRect.top,
+                                        charRight,
+                                        charRect.bottom
+                                    )
+                                }
 
                                 results.add(Pair(c.toString(), individualCharRect))
                             }
